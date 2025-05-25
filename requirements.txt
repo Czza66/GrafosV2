@@ -3,10 +3,4 @@ uvicorn
 osmnx
 networkx
 pyomo
-matplotlib
-numpy
-Pillow
 folium
-aiofiles
-python-multipart
-scikit-learn
