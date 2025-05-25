@@ -6,16 +6,25 @@ import io
 import base64
 
 def parsear_coordenadas(lista):
-    return [tuple(map(float, coord.strip().split(','))) for coord in lista]
+    try:
+        return [tuple(map(float, coord.strip().split(','))) for coord in lista]
+    except Exception as e:
+        raise ValueError("Las coordenadas deben tener el formato 'lat, lon' en string.")
 
 def resolver_ruta_optima(lista_coordenadas):
     print("Cargando grafo de Bogotá...")
     G = ox.graph_from_place("Bogotá, Colombia", network_type='drive')
-    
+    G = ox.project_graph(G)
+
     coordenadas = parsear_coordenadas(lista_coordenadas)
+
+    if len(coordenadas) < 2:
+        raise ValueError("Debes enviar al menos dos coordenadas.")
+
+    print("Buscando nodos más cercanos...")
     nodos = [ox.distance.nearest_nodes(G, lon, lat) for lat, lon in coordenadas]
 
-    # Construir ruta por tramos consecutivos
+    print("Calculando ruta por tramos...")
     ruta_total = []
     for i in range(len(nodos) - 1):
         tramo = nx.shortest_path(G, nodos[i], nodos[i+1], weight='length')
@@ -23,16 +32,16 @@ def resolver_ruta_optima(lista_coordenadas):
             tramo = tramo[1:]
         ruta_total.extend(tramo)
 
-    # Crear conjunto de arcos y distancias
+    print("Creando arcos y distancias...")
     arcos = []
     distancias = {}
     for u, v in zip(ruta_total[:-1], ruta_total[1:]):
         d = G[u][v][0]['length'] / 1000
         arcos.append((u, v))
         distancias[(u, v)] = d
-    nodos_unicos = set([n for a in arcos for n in a])
+    nodos_unicos = set(n for a in arcos for n in a)
 
-    # Modelo Pyomo
+    print("Construyendo modelo Pyomo...")
     model = ConcreteModel()
     model.A = Set(initialize=arcos, dimen=2)
     model.N = Set(initialize=nodos_unicos)
@@ -51,13 +60,17 @@ def resolver_ruta_optima(lista_coordenadas):
 
     model.flujo = Constraint(model.N, rule=flujo_balance)
 
+    print("Resolviendo con CBC...")
     solver = SolverFactory('cbc')
     result = solver.solve(model)
+
+    if result.solver.status != SolverStatus.ok or result.solver.termination_condition != TerminationCondition.optimal:
+        raise Exception("No se encontró una solución óptima.")
 
     ruta_optima = [i for i in model.A if value(model.x[i]) == 1]
     nodos_ruta = [ruta_optima[0][0]] + [a[1] for a in ruta_optima]
 
-    # Imagen en JPG codificada en base64
+    print("Generando imagen en base64...")
     fig, ax = ox.plot_graph_route(G, nodos_ruta, route_color='orange', node_size=0, show=False, close=False)
     buf = io.BytesIO()
     fig.savefig(buf, format='jpg', bbox_inches='tight')
@@ -65,11 +78,12 @@ def resolver_ruta_optima(lista_coordenadas):
     buf.seek(0)
     imagen_base64 = base64.b64encode(buf.read()).decode('utf-8')
 
-    # Coordenadas para Google Maps
+    print("Construyendo URL de Google Maps...")
     coordenadas_ruta = [(G.nodes[n]['y'], G.nodes[n]['x']) for n in nodos_ruta]
     base_url = "https://www.google.com/maps/dir/"
     google_maps_url = base_url + "/".join([f"{lat},{lon}" for lat, lon in coordenadas_ruta])
 
+    print("Proceso completado exitosamente.")
     return {
         "nodos": nodos_ruta,
         "google_maps_url": google_maps_url,
