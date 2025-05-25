@@ -4,3 +4,4 @@ osmnx
 networkx
 pyomo
 folium
+scikit-learn
