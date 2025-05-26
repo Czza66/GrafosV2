@@ -2,6 +2,7 @@ fastapi
 uvicorn
 osmnx
 networkx
+matplotlib
 pyomo
 folium
 scikit-learn

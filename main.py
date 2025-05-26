@@ -9,6 +9,9 @@ from pyomo.environ import *
 import folium
 import uuid
 import os
+import matplotlib.pyplot as plt
+import io
+import base64
 
 from mapa import generar_mapa
 
@@ -79,10 +82,24 @@ def calcular_ruta_optima(data: CoordenadasInput):
         coordenadas = [(G.nodes[n]['y'], G.nodes[n]['x']) for n in nodos_ruta]
         mapa_id = generar_mapa(coordenadas)
 
+        # ======== NUEVO: Imagen del grafo con ruta (en base64) ========
+        fig, ax = ox.plot_graph_route(
+            G, nodos_ruta, route_color='red', route_linewidth=4, node_size=0,
+            show=False, close=False
+        )
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        # ===============================================================
+
         return {
             "distancia_total_km": round(distancia_total, 2),
             "ruta": coordenadas,
-            "mapa_url": f"/ver-mapa/{mapa_id}"
+            "mapa_url": f"/ver-mapa/{mapa_id}",
+            "grafo_img_base64": img_base64
         }
 
     except Exception as e:
