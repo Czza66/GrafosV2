@@ -5,3 +5,4 @@ networkx
 pyomo
 folium
 scikit-learn
+Jinja2
